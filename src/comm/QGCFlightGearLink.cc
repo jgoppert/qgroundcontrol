@@ -505,10 +505,10 @@ bool QGCFlightGearLink::connectSimulation()
 
 //    connect (terraSync, SIGNAL(readyReadStandardOutput()), this, SLOT(printTerraSyncOutput()));
 //    connect (terraSync, SIGNAL(readyReadStandardError()), this, SLOT(printTerraSyncError()));
-    terraSync->start(processTerraSync, terraSyncArguments);
+    //terraSync->start(processTerraSync, terraSyncArguments);
 //    qDebug() << "STARTING: " << processTerraSync << terraSyncArguments;
 
-    process->start(processFgfs, flightGearArguments);
+    //process->start(processFgfs, flightGearArguments);
 
 
 
