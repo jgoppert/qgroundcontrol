@@ -84,6 +84,8 @@ UAS::UAS(MAVLinkProtocol* protocol, int id) : UASInterface(),
     pitch(0.0),
     yaw(0.0),
     statusTimeout(new QTimer(this)),
+    hilOut(new QTimer(this)),
+    hilCount(0),
     #if defined(QGC_PROTOBUF_ENABLED) && defined(QGC_USE_PIXHAWK_MESSAGES)
     receivedOverlayTimestamp(0.0),
     receivedObstacleListTimestamp(0.0),
@@ -119,6 +121,8 @@ UAS::UAS(MAVLinkProtocol* protocol, int id) : UASInterface(),
     color = UASInterface::getNextColor();
     setBatterySpecs(QString("9V,9.5V,12.6V"));
     connect(statusTimeout, SIGNAL(timeout()), this, SLOT(updateState()));
+    connect(hilOut, SIGNAL(timeout()), this, SLOT(hilOutUpdate()));
+    hilOut->start(1000);
     connect(this, SIGNAL(systemSpecsChanged(int)), this, SLOT(writeSettings()));
     statusTimeout->start(500);
     readSettings(); 
@@ -138,6 +142,12 @@ UAS::~UAS()
     delete links;
     delete statusTimeout;
     delete simulation;
+}
+
+void UAS::hilOutUpdate()
+{
+    printf("hil Hz: %d\n", hilCount);
+    hilCount = 0;
 }
 
 /**
@@ -2681,6 +2691,7 @@ void UAS::sendHilState(uint64_t time_us, float roll, float pitch, float yaw, flo
                                    time_us, roll, pitch, yaw, rollspeed, pitchspeed, yawspeed,
                                    lat, lon, alt, vx, vy, vz, xacc, yacc, zacc);
         sendMessage(msg);
+        hilCount += 1;
     }
     else
     {

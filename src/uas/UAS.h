@@ -288,6 +288,8 @@ protected: //COMMENTS FOR TEST UNIT
     double yaw;
     quint64 lastHeartbeat;      ///< Time of the last heartbeat message
     QTimer* statusTimeout;      ///< Timer for various status timeouts
+    QTimer* hilOut;      ///< Timer for various status timeouts
+    uint32_t hilCount;
 
     int imageSize;              ///< Image size being transmitted (bytes)
     int imagePackets;           ///< Number of data packets being sent for this image
@@ -693,6 +695,7 @@ protected:
     bool hilEnabled;            ///< Set to true if HIL mode is enabled from GCS (UAS might be in HIL even if this flag is not set, this defines the GCS HIL setting)
 
 protected slots:
+    void hilOutUpdate();
     /** @brief Write settings to disk */
     void writeSettings();
     /** @brief Read settings from disk */
