@@ -34,6 +34,8 @@ const int QmlObjectListModel::TextRole = Qt::UserRole + 1;
 
 QmlObjectListModel::QmlObjectListModel(QObject* parent)
     : QAbstractListModel(parent)
+    , _dirty(false)
+    , _skipDirtyFirstItem(false)
 {
 
 }
@@ -142,13 +144,26 @@ const QObject* QmlObjectListModel::operator[](int index) const
 void QmlObjectListModel::clear(void)
 {
     while (rowCount()) {
-        removeRows(0, 1);
+        removeAt(0);
     }
 }
 
-void QmlObjectListModel::removeAt(int i)
+QObject* QmlObjectListModel::removeAt(int i)
 {
+    QObject* removedObject = _objectList[i];
+    
+    // Look for a dirtyChanged signal on the object
+    if (_objectList[i]->metaObject()->indexOfSignal(QMetaObject::normalizedSignature("dirtyChanged(bool)")) != -1) {
+        if (!_skipDirtyFirstItem || i != 0) {
+            QObject::disconnect(_objectList[i], SIGNAL(dirtyChanged(bool)), this, SLOT(_childDirtyChanged(bool)));
+        }
+    }
+    
     removeRows(i, 1);
+    
+    setDirty(true);
+    
+    return removedObject;
 }
 
 void QmlObjectListModel::insert(int i, QObject* object)
@@ -158,9 +173,18 @@ void QmlObjectListModel::insert(int i, QObject* object)
     }
     
     QQmlEngine::setObjectOwnership(object, QQmlEngine::CppOwnership);
+    
+    // Look for a dirtyChanged signal on the object
+    if (object->metaObject()->indexOfSignal(QMetaObject::normalizedSignature("dirtyChanged(bool)")) != -1) {
+        if (!_skipDirtyFirstItem || i != 0) {
+            QObject::connect(object, SIGNAL(dirtyChanged(bool)), this, SLOT(_childDirtyChanged(bool)));
+        }
+    }
 
     _objectList.insert(i, object);
     insertRows(i, 1);
+    
+    setDirty(true);
 }
 
 void QmlObjectListModel::append(QObject* object)
@@ -176,4 +200,28 @@ int QmlObjectListModel::count(void) const
 QObject* QmlObjectListModel::get(int index)
 {
     return _objectList[index];
+}
+
+void QmlObjectListModel::setDirty(bool dirty)
+{
+    _dirty = dirty;
+
+    if (!dirty) {
+        // Need to clear dirty from all children
+        foreach(QObject* object, _objectList) {
+            if (object->property("dirty").isValid()) {
+                object->setProperty("dirty", false);
+            }
+        }
+    }
+    
+    emit dirtyChanged(_dirty);
+}
+
+void QmlObjectListModel::_childDirtyChanged(bool dirty)
+{
+    _dirty |= dirty;
+    // We want to emit dirtyChanged even if the actual value of _dirty didn't change. It can be a useful
+    // signal to know when a child has changed dirty state
+    emit dirtyChanged(_dirty);
 }

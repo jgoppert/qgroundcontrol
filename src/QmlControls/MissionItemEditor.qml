@@ -13,47 +13,38 @@ import QGroundControl.Palette       1.0
 Rectangle {
     id: _root
 
-    property var    missionItem
+    property var    missionItem ///< MissionItem associated with this editor
+    property bool   readOnly    ///< true: read only view, false: full editing view
 
     signal clicked
     signal remove
-    signal moveUp
-    signal moveDown
 
-    height: missionItem.isCurrentItem ?
-                (missionItem.textFieldFacts.count * (measureTextField.height + _margin)) +
-                    (missionItem.checkboxFacts.count * (measureCheckbox.height + _margin)) +
-                    commandPicker.height + deleteButton.height + (_margin * 9) :
-                commandPicker.height + (_margin * 2)
+    height: innerItem.height + (_margin * 3)
     color:  missionItem.isCurrentItem ? qgcPal.buttonHighlight : qgcPal.windowShade
+    radius: _radius
 
     readonly property real _editFieldWidth:     ScreenTools.defaultFontPixelWidth * 16
-    readonly property real _margin:             ScreenTools.defaultFontPixelWidth / 3
+    readonly property real _margin:             ScreenTools.defaultFontPixelWidth / 2
+    readonly property real _radius:             ScreenTools.defaultFontPixelWidth / 2
 
     QGCPalette {
         id: qgcPal
         colorGroupEnabled: enabled
     }
 
-    QGCTextField {
-        id:         measureTextField
-        visible:    false
-    }
-
-    QGCCheckBox {
-        id:         measureCheckbox
-        visible:    false
-    }
-
     Item {
+        id:                 innerItem
         anchors.margins:    _margin
-        anchors.fill:       parent
+        anchors.top:        parent.top
+        anchors.left:       parent.left
+        anchors.right:      parent.right
+        height:             valuesRect.visible ? valuesRect.y + valuesRect.height : valuesRect.y
 
         MissionItemIndexLabel {
             id:                     label
             anchors.verticalCenter: commandPicker.verticalCenter
             isCurrentItem:          missionItem.isCurrentItem
-            label:                  missionItem.sequenceNumber
+            label:                  missionItem.sequenceNumber == 0 ? "H" : missionItem.sequenceNumber
         }
 
         MouseArea {
@@ -63,7 +54,6 @@ Rectangle {
             onClicked: _root.clicked()
         }
 
-
         QGCComboBox {
             id:                 commandPicker
             anchors.leftMargin: ScreenTools.defaultFontPixelWidth * 10
@@ -71,22 +61,44 @@ Rectangle {
             anchors.right:      parent.right
             currentIndex:       missionItem.commandByIndex
             model:              missionItem.commandNames
+            visible:            missionItem.sequenceNumber != 0 && missionItem.isCurrentItem
 
             onActivated: missionItem.commandByIndex = index
         }
 
         Rectangle {
+            anchors.fill:   commandPicker
+            color:          qgcPal.button
+            visible:        !commandPicker.visible
+
+            QGCLabel {
+                id:                 homeLabel
+                anchors.leftMargin: ScreenTools.defaultFontPixelWidth
+                anchors.fill:       parent
+                verticalAlignment:  Text.AlignVCenter
+                text:               missionItem.sequenceNumber == 0 ? "Home" : missionItem.commandName
+                color:              qgcPal.buttonText
+            }
+        }
+
+        Rectangle {
+            id:                 valuesRect
             anchors.topMargin:  _margin
             anchors.top:        commandPicker.bottom
-            anchors.bottom:     parent.bottom
             anchors.left:       parent.left
             anchors.right:      parent.right
+            height:             valuesItem.height
             color:              qgcPal.windowShadeDark
             visible:            missionItem.isCurrentItem
+            radius:             _radius
 
             Item {
+                id:                 valuesItem
                 anchors.margins:    _margin
-                anchors.fill:   parent
+                anchors.left:       parent.left
+                anchors.right:      parent.right
+                anchors.top:        parent.top
+                height:             valuesColumn.height + _margin
 
                 Column {
                     id:             valuesColumn
@@ -94,6 +106,12 @@ Rectangle {
                     anchors.right:  parent.right
                     anchors.top:    parent.top
                     spacing:        _margin
+
+                    QGCLabel {
+                        width:      parent.width
+                        wrapMode:   Text.WordWrap
+                        text:       missionItem.commandDescription
+                    }
 
                     Repeater {
                         model: missionItem.textFieldFacts
@@ -103,6 +121,7 @@ Rectangle {
                             height: textField.height
 
                             QGCLabel {
+                                id:                 textFieldLabel
                                 anchors.baseline:   textField.baseline
                                 text:               object.name
                             }
@@ -113,13 +132,16 @@ Rectangle {
                                 width:          _editFieldWidth
                                 showUnits:      true
                                 fact:           object
+                                visible:        !_root.readOnly
+                            }
+
+                            FactLabel {
+                                anchors.baseline:   textFieldLabel.baseline
+                                anchors.right:      parent.right
+                                fact:               object
+                                visible:            _root.readOnly
                             }
                         }
-                    }
-
-                    Item {
-                        width:  10
-                        height: missionItem.textFieldFacts.count ? _margin : 0
                     }
 
                     Repeater {
@@ -131,41 +153,6 @@ Rectangle {
                             fact:   object
                         }
                     }
-
-                    Item {
-                        width:  10
-                        height: missionItem.checkboxFacts.count ? _margin : 0
-                    }
-
-                    Row {
-                        width:      parent.width
-                        spacing:    _margin
-
-                        readonly property real buttonWidth: (width - (_margin * 2)) / 3
-
-                        QGCButton {
-                            id:     deleteButton
-                            width:  parent.buttonWidth
-                            text:   "Delete"
-
-                            onClicked: _root.remove()
-                        }
-
-                        QGCButton {
-                            width:  parent.buttonWidth
-                            text:   "Up"
-
-                            onClicked: _root.moveUp()
-                        }
-
-                        QGCButton {
-                            width:  parent.buttonWidth
-                            text:   "Down"
-
-                            onClicked: _root.moveDown()
-                        }
-                    }
-
                 } // Column
             } // Item
         } // Rectangle

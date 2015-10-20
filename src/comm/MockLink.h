@@ -33,24 +33,28 @@
 #include "QGCMAVLink.h"
 
 Q_DECLARE_LOGGING_CATEGORY(MockLinkLog)
-Q_DECLARE_LOGGING_CATEGORY(MockLinkLogVerbose)
-
-/// @file
-///     @brief Mock implementation of a Link.
-///
-///     @author Don Gagne <don@thegagnes.com>
+Q_DECLARE_LOGGING_CATEGORY(MockLinkVerboseLog)
 
 class MockConfiguration : public LinkConfiguration
 {
 public:
+    MockConfiguration(const QString& name);
+    MockConfiguration(MockConfiguration* source);
 
-    MockConfiguration(const QString& name) : LinkConfiguration(name) {}
-    MockConfiguration(MockConfiguration* source) : LinkConfiguration(source) {}
-    int  type() { return LinkConfiguration::TypeMock; }
-    void copyFrom(LinkConfiguration* source) { LinkConfiguration::copyFrom(source); }
-    void loadSettings(QSettings& settings, const QString& root) { Q_UNUSED(settings); Q_UNUSED(root); }
-    void saveSettings(QSettings& settings, const QString& root) { Q_UNUSED(settings); Q_UNUSED(root); }
-    void updateSettings() {}
+    MAV_AUTOPILOT firmwareType(void) { return _firmwareType; }
+    void setFirmwareType(MAV_AUTOPILOT firmwareType) { _firmwareType = firmwareType; }
+
+    // Overrides from LinkConfiguration
+    int  type(void) { return LinkConfiguration::TypeMock; }
+    void copyFrom(LinkConfiguration* source);
+    void loadSettings(QSettings& settings, const QString& root);
+    void saveSettings(QSettings& settings, const QString& root);
+    void updateSettings(void);
+
+private:
+    MAV_AUTOPILOT _firmwareType;
+
+    static const char* _firmwareTypeKey;
 };
 
 class MockLink : public LinkInterface
@@ -143,6 +147,8 @@ private:
     void _handleCommandLong(const mavlink_message_t& msg);
     float _floatUnionForParam(int componentId, const QString& paramName);
     void _setParamFloatUnionIntoMap(int componentId, const QString& paramName, float paramFloat);
+    void _sendHomePosition(void);
+    void _sendGpsRawInt(void);
 
     MockLinkMissionItemHandler  _missionItemHandler;
 
@@ -166,6 +172,10 @@ private:
     MAV_AUTOPILOT _autopilotType;
     
     MockLinkFileServer* _fileServer;
+
+    static float _vehicleLatitude;
+    static float _vehicleLongitude;
+    static float _vehicleAltitude;
 };
 
 #endif

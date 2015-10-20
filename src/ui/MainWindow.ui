@@ -62,7 +62,6 @@
     <addaction name="actionMuteAudioOutput"/>
     <addaction name="actionAdd_Link"/>
     <addaction name="actionSettings"/>
-    <addaction name="actionUseMissionEditor"/>
     <addaction name="separator"/>
     <addaction name="actionExit"/>
    </widget>
@@ -81,31 +80,20 @@
     <addaction name="actionSetup"/>
     <addaction name="actionPlan"/>
     <addaction name="actionFlight"/>
-    <addaction name="actionAnalyze"/>
     <addaction name="separator"/>
     <addaction name="actionFullscreen"/>
     <addaction name="actionNormal"/>
     <addaction name="separator"/>
     <addaction name="actionStatusBar"/>
    </widget>
-   <widget class="QMenu" name="menuAdvanced">
+   <widget class="QMenu" name="menuWidgets">
     <property name="title">
-     <string>Advanced</string>
+     <string>Widgets</string>
     </property>
-    <widget class="QMenu" name="menuTools">
-     <property name="title">
-      <string>Tool Widgets</string>
-     </property>
-     <addaction name="separator"/>
-    </widget>
-    <addaction name="actionSimulationView"/>
-    <addaction name="separator"/>
-    <addaction name="separator"/>
-    <addaction name="menuTools"/>
    </widget>
    <addaction name="menuMGround"/>
    <addaction name="menuPerspectives"/>
-   <addaction name="menuAdvanced"/>
+   <addaction name="menuWidgets"/>
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
@@ -143,14 +131,6 @@
    </property>
    <property name="text">
     <string>Plan</string>
-   </property>
-  </action>
-  <action name="actionAnalyze">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>Analyze</string>
    </property>
   </action>
   <action name="actionFlight">
@@ -227,14 +207,6 @@
     <string>Advanced Mode</string>
    </property>
   </action>
-  <action name="actionSimulationView">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>HIL Simulation</string>
-   </property>
-  </action>
   <action name="actionStatusBar">
    <property name="checkable">
     <bool>true</bool>
@@ -254,22 +226,9 @@
     <string>Mission Editor</string>
    </property>
   </action>
-  <action name="actionUseMissionEditor">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>Use new mission editor (reboot required)</string>
-   </property>
-   <property name="toolTip">
-    <string>Mission Editor</string>
-   </property>
-  </action>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
- <resources>
-  <include location="../../qgroundcontrol.qrc"/>
- </resources>
+ <resources/>
  <connections>
   <connection>
    <sender>actionExit</sender>

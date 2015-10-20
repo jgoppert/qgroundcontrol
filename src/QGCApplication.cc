@@ -31,7 +31,6 @@
 
 #include <QFile>
 #include <QFlags>
-#include <QSplashScreen>
 #include <QPixmap>
 #include <QDesktopWidget>
 #include <QPainter>
@@ -42,7 +41,7 @@
 
 #include "VideoStreaming.h"
 
-#include "configuration.h"
+#include "git_version.h"
 #include "QGC.h"
 #include "QGCApplication.h"
 #include "MainWindow.h"
@@ -74,7 +73,9 @@
 #include "FirmwarePluginManager.h"
 #include "MultiVehicleManager.h"
 #include "Generic/GenericFirmwarePlugin.h"
-#include "APM/APMFirmwarePlugin.h"
+#include "APM/ArduCopterFirmwarePlugin.h"
+#include "APM/ArduPlaneFirmwarePlugin.h"
+#include "APM/ArduRoverFirmwarePlugin.h"
 #include "PX4/PX4FirmwarePlugin.h"
 #include "Vehicle.h"
 #include "MavlinkQmlSingleton.h"
@@ -84,6 +85,14 @@
 #include "QGroundControlQmlGlobal.h"
 #include "HomePositionManager.h"
 #include "FlightMapSettings.h"
+#include "QGCQGeoCoordinate.h"
+#include "CoordinateVector.h"
+#include "MainToolBarController.h"
+#include "MissionController.h"
+#include "MissionEditorController.h"
+#include "FlightDisplayViewController.h"
+#include "VideoSurface.h"
+#include "VideoReceiver.h"
 
 #ifndef __ios__
     #include "SerialLink.h"
@@ -162,9 +171,6 @@ QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
     , _runningUnitTests(unitTesting)
     , _styleIsDark(true)
 	, _fakeMobile(false)
-#ifdef UNITTEST_BUILD
-    , _useNewMissionEditor(true)    // Unit Tests run new mission editor
-#endif
 #ifdef QT_DEBUG
     , _testHighDPI(false)
 #endif
@@ -198,8 +204,12 @@ QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
 #ifdef __mobile__
     QLoggingCategory::setFilterRules(QStringLiteral("*Log.debug=false"));
 #else
+    QString filterRules;
+    
+    // Turn off bogus ssl warning
+    filterRules += "qt.network.ssl.warning=false\n";
+    
     if (logging) {
-        QString filterRules;
         QStringList logList = loggingOptions.split(",");
         
         if (logList[0] == "full") {
@@ -214,20 +224,7 @@ QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
                 filterRules += ".debug=true\n";
             }
         }
-        
-        if (_runningUnitTests) {
-            // We need to turn off these warnings until the firmware meta data is cleaned up
-            filterRules += "PX4ParameterLoaderLog.warning=false\n";
-        }
-        
-        qDebug() << "Filter rules" << filterRules;
-        QLoggingCategory::setFilterRules(filterRules);
     } else {
-        if (_runningUnitTests) {
-            // We need to turn off these warnings until the firmware meta data is cleaned up
-            QLoggingCategory::setFilterRules(QStringLiteral("PX4ParameterLoaderLog.warning=false"));
-        }
-        
         // First thing we want to do is set up the qtlogging.ini file. If it doesn't already exist we copy
         // it to the correct location. This way default debug builds will have logging turned off.
 
@@ -266,6 +263,9 @@ QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
             }
         }
     }
+    
+    qDebug() << "Filter rules" << filterRules;
+    QLoggingCategory::setFilterRules(filterRules);
 #endif
 
     // Set up timer for delayed missing fact display
@@ -284,18 +284,21 @@ QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
     setOrganizationName(QGC_ORG_NAME);
     setOrganizationDomain(QGC_ORG_DOMAIN);
 
-    // Version string is build from component parts. Format is:
-    //  vMajor.Minor.BuildNumber BuildType
-    QString versionString("v%1.%2.%3 %4");
-    versionString = versionString.arg(QGC_APPLICATION_VERSION_MAJOR).arg(QGC_APPLICATION_VERSION_MINOR).arg(QGC_APPLICATION_VERSION_BUILDNUMBER).arg(QGC_APPLICATION_VERSION_BUILDTYPE);
+    QString versionString(git_version());
+    // stable versions are on tags (v1.2.3)
+    // development versions are full git describe versions (v1.2.3-18-g879e8b3)
+    if (versionString.length() > 8) {
+        versionString.append(" (Development)");
+    }
     this->setApplicationVersion(versionString);
 
     // Set settings format
     QSettings::setDefaultFormat(QSettings::IniFormat);
 
     QSettings settings;
+    qDebug() << "Settings location" << settings.fileName() << settings.isWritable();
+
 #ifdef UNITTEST_BUILD
-    qDebug() << "Settings location" << settings.fileName();
     Q_ASSERT(settings.isWritable());
 #endif
     // The setting will delete all settings on this boot
@@ -314,7 +317,6 @@ QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
 
     // Initialize Video Streaming
     initializeVideoStreaming(argc, argv);
-
 }
 
 QGCApplication::~QGCApplication()
@@ -339,18 +341,26 @@ void QGCApplication::_initCommon(void)
     qmlRegisterUncreatableType<JoystickManager>     ("QGroundControl.JoystickManager",  1, 0, "JoystickManager",        "Reference only");
     qmlRegisterUncreatableType<Joystick>            ("QGroundControl.JoystickManager",  1, 0, "Joystick",               "Reference only");
     qmlRegisterUncreatableType<QmlObjectListModel>  ("QGroundControl",                  1, 0, "QmlObjectListModel",     "Reference only");
-    
-    qmlRegisterType<ViewWidgetController>           ("QGroundControl.Controllers", 1, 0, "ViewWidgetController");
+    qmlRegisterUncreatableType<QGCQGeoCoordinate>   ("QGroundControl",                  1, 0, "QGCQGeoCoordinate",      "Reference only");
+    qmlRegisterUncreatableType<CoordinateVector>    ("QGroundControl",                  1, 0, "CoordinateVector",       "Reference only");
+    qmlRegisterUncreatableType<VideoSurface>        ("QGroundControl",                  1, 0, "VideoSurface",           "Reference only");
+    qmlRegisterUncreatableType<VideoReceiver>       ("QGroundControl",                  1, 0, "VideoReceiver",          "Reference only");
+
     qmlRegisterType<ParameterEditorController>      ("QGroundControl.Controllers", 1, 0, "ParameterEditorController");
-    qmlRegisterType<CustomCommandWidgetController>  ("QGroundControl.Controllers", 1, 0, "CustomCommandWidgetController");
     qmlRegisterType<FlightModesComponentController> ("QGroundControl.Controllers", 1, 0, "FlightModesComponentController");
     qmlRegisterType<AirframeComponentController>    ("QGroundControl.Controllers", 1, 0, "AirframeComponentController");
     qmlRegisterType<SensorsComponentController>     ("QGroundControl.Controllers", 1, 0, "SensorsComponentController");
     qmlRegisterType<PowerComponentController>       ("QGroundControl.Controllers", 1, 0, "PowerComponentController");
     qmlRegisterType<RadioComponentController>       ("QGroundControl.Controllers", 1, 0, "RadioComponentController");
     qmlRegisterType<ScreenToolsController>          ("QGroundControl.Controllers", 1, 0, "ScreenToolsController");
-    
+    qmlRegisterType<MainToolBarController>          ("QGroundControl.Controllers", 1, 0, "MainToolBarController");
+    qmlRegisterType<MissionController>              ("QGroundControl.Controllers", 1, 0, "MissionController");
+    qmlRegisterType<MissionEditorController>        ("QGroundControl.Controllers", 1, 0, "MissionEditorController");
+    qmlRegisterType<FlightDisplayViewController>    ("QGroundControl.Controllers", 1, 0, "FlightDisplayViewController");
+
 #ifndef __mobile__
+    qmlRegisterType<ViewWidgetController>           ("QGroundControl.Controllers", 1, 0, "ViewWidgetController");
+    qmlRegisterType<CustomCommandWidgetController>  ("QGroundControl.Controllers", 1, 0, "CustomCommandWidgetController");
     qmlRegisterType<FirmwareUpgradeController>      ("QGroundControl.Controllers", 1, 0, "FirmwareUpgradeController");
     qmlRegisterType<JoystickConfigController>       ("QGroundControl.Controllers", 1, 0, "JoystickConfigController");
 #endif
@@ -369,6 +379,8 @@ void QGCApplication::_initCommon(void)
     } else if (settings.allKeys().count()) {
         // Settings version key is missing and there are settings. This is an upgrade scenario.
         settingsUpgraded = true;
+    } else {
+        settings.setValue(_settingsVersionKey, QGC_SETTINGS_VERSION);
     }
 
     if (settingsUpgraded) {
@@ -412,6 +424,8 @@ void QGCApplication::_initCommon(void)
     }
     qDebug() << "Saved files location" << savedFilesLocation;
     settings.setValue(_savedFilesLocationKey, savedFilesLocation);
+
+    settings.sync();
 }
 
 bool QGCApplication::_initForNormalAppBoot(void)
@@ -422,29 +436,12 @@ bool QGCApplication::_initForNormalAppBoot(void)
 
     _styleIsDark = settings.value(_styleKey, _styleIsDark).toBool();
     _loadCurrentStyle();
-    
-    // Temp hack for new mission editor
-#ifdef __mobile__
-    // Mobile builds always use new Mission Editor
-    _useNewMissionEditor = true;
-#else
-    _useNewMissionEditor = settings.value("UseNewMissionEditor", false).toBool();
-#endif
-    
-    // Show splash screen
-    QPixmap splashImage(":/res/SplashScreen");
-    QSplashScreen* splashScreen = new QSplashScreen(splashImage);
-    // Delete splash screen after mainWindow was displayed
-    splashScreen->setAttribute(Qt::WA_DeleteOnClose);
-    splashScreen->show();
-    processEvents();
-    splashScreen->showMessage(tr("Loading application fonts"), Qt::AlignLeft | Qt::AlignBottom, QColor(62, 93, 141));
+
     // Exit main application when last window is closed
     connect(this, SIGNAL(lastWindowClosed()), this, SLOT(quit()));
 
     // Start the user interface
-    splashScreen->showMessage(tr("Starting user interface"), Qt::AlignLeft | Qt::AlignBottom, QColor(62, 93, 141));
-    MainWindow* mainWindow = MainWindow::_create(splashScreen);
+    MainWindow* mainWindow = MainWindow::_create();
     Q_CHECK_PTR(mainWindow);
 
     // If we made it this far and we still don't have a location. Either the specfied location was invalid
@@ -458,13 +455,11 @@ bool QGCApplication::_initForNormalAppBoot(void)
         mainWindow->showSettings();
     }
 
-    // Remove splash screen
-    splashScreen->finish(mainWindow);
-    mainWindow->splashScreenFinished();
-
+#ifndef __mobile__
     // Now that main window is up check for lost log files
     connect(this, &QGCApplication::checkForLostLogFiles, MAVLinkProtocol::instance(), &MAVLinkProtocol::checkForLostLogFiles);
     emit checkForLostLogFiles();
+#endif
 
     // Load known link configurations
     LinkManager::instance()->loadLinkConfigurationList();
@@ -597,7 +592,9 @@ void QGCApplication::_createSingletons(void)
     
     // No dependencies
     firmwarePlugin = PX4FirmwarePlugin::_createSingleton();
-    firmwarePlugin = APMFirmwarePlugin::_createSingleton();
+    firmwarePlugin = ArduCopterFirmwarePlugin::_createSingleton();
+    firmwarePlugin = ArduPlaneFirmwarePlugin::_createSingleton();
+    firmwarePlugin = ArduRoverFirmwarePlugin::_createSingleton();
     
     // No dependencies
     FirmwarePluginManager* firmwarePluginManager = FirmwarePluginManager::_createSingleton();
@@ -648,8 +645,9 @@ void QGCApplication::_createSingletons(void)
 
 void QGCApplication::_destroySingletons(void)
 {
-    if (MainWindow::instance()) {
-        delete MainWindow::instance();
+    MainWindow* mainWindow = MainWindow::instance();
+    if (mainWindow) {
+        delete mainWindow;
     }
 
     if (LinkManager::instance(true /* nullOk */)) {
@@ -673,7 +671,9 @@ void QGCApplication::_destroySingletons(void)
     FirmwarePluginManager::_deleteSingleton();
     GenericFirmwarePlugin::_deleteSingleton();
     PX4FirmwarePlugin::_deleteSingleton();
-    APMFirmwarePlugin::_deleteSingleton();
+    ArduCopterFirmwarePlugin::_deleteSingleton();
+    ArduPlaneFirmwarePlugin::_deleteSingleton();
+    ArduRoverFirmwarePlugin::_deleteSingleton();
     HomePositionManager::_deleteSingleton();
     FlightMapSettings::_deleteSingleton();
 }
@@ -761,17 +761,6 @@ void QGCApplication::_loadCurrentStyle(void)
         }
     }
     
-    // Now that we have the styles loaded we need to adjust the font sizes.
-    
-    QString fSmall  = QString("%1px;").arg(ScreenToolsController::smallFontPixelSize_s());
-    QString fNormal = QString("%1px;").arg(ScreenToolsController::defaultFontPixelSize_s());
-    QString fLarge  = QString("%1px;").arg(ScreenToolsController::largeFontPixelSize_s());
-    
-    qDebug() << fSmall << fNormal << fLarge;
-
-    styles.replace("FONT_SMALL",  fSmall);
-    styles.replace("FONT_NORMAL", fNormal);
-    styles.replace("FONT_LARGE",  fLarge);
     setStyleSheet(styles);
 
     if (!success) {
@@ -816,16 +805,8 @@ void QGCApplication::showToolBarMessage(const QString& message)
 {
     MainWindow* mainWindow = MainWindow::instance();
     if (mainWindow) {
-        mainWindow->getMainToolBar()->showToolBarMessage(message);
+        mainWindow->showToolbarMessage(message);
     } else {
         QGCMessageBox::information("", message);
     }
-}
-
-void QGCApplication::setUseNewMissionEditor(bool use)
-{
-    // Temp hack for new mission editor
-    QSettings settings;
-    
-    settings.setValue("UseNewMissionEditor", use);
 }

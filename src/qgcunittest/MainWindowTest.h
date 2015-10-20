@@ -31,7 +31,6 @@
 
 #include "UnitTest.h"
 #include "MainWindow.h"
-#include "MainToolBar.h"
 
 class MainWindowTest : public UnitTest
 {
@@ -46,12 +45,11 @@ private slots:
     
     void _connectWindowClosePX4_test(void);
     void _connectWindowCloseGeneric_test(void);
-    
+
 private:
     void _connectWindowClose_test(MAV_AUTOPILOT autopilot);
     
     MainWindow*     _mainWindow;
-    MainToolBar*    _mainToolBar;
 };
 
 #endif

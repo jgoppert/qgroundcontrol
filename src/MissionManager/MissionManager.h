@@ -62,7 +62,9 @@ public:
     void requestMissionItems(void);
     
     /// Writes the specified set of mission items to the vehicle
-    void writeMissionItems(const QmlObjectListModel& missionItems);
+    ///     @oaram missionItems Items to send to vehicle
+    ///     @param skipFirstItem true: Don't send first item
+    void writeMissionItems(const QmlObjectListModel& missionItems, bool skipFirstItem);
     
     /// Returns a copy of the current set of mission items. Caller is responsible for
     /// freeing returned object.
@@ -116,6 +118,7 @@ private:
     void _retryRead(void);
     bool _retrySequence(AckType_t ackType);
     QString _ackTypeToString(AckType_t ackType);
+    QString _missionResultToString(MAV_MISSION_RESULT result);
 
 private:
     Vehicle*            _vehicle;

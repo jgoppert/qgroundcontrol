@@ -3,6 +3,7 @@ import QtQuick.Controls         1.2
 import QtQuick.Controls.Styles  1.2
 
 import QGroundControl.ScreenTools 1.0
+import QGroundControl.Palette     1.0
 
 Rectangle {
     property alias  label:          _label.text
@@ -10,12 +11,14 @@ Rectangle {
 
     signal clicked
 
-    width:          ScreenTools.defaultFontPixelHeight * 1.5
+    QGCPalette { id: qgcPal }
+
+    width:          ScreenTools.mediumFontPixelSize * 1.5
     height:         width
     radius:         width / 2
     border.width:   2
     border.color:   "white"
-    color:          isCurrentItem ? "green" : "orange"
+    color:          isCurrentItem ? "green" : qgcPal.mapButtonHighlight
 
     MouseArea {
         anchors.fill: parent
@@ -29,5 +32,6 @@ Rectangle {
         horizontalAlignment:    Text.AlignHCenter
         verticalAlignment:      Text.AlignVCenter
         color:                  "white"
+        font.pixelSize:         ScreenTools.mediumFontPixelSize
     }
 }

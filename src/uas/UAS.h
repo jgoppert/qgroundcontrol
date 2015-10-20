@@ -85,7 +85,7 @@ public:
     /** @brief The time interval the robot is switched on */
     quint64 getUptime() const;
     /** @brief Add one measurement and get low-passed voltage */
-    float filterVoltage(float value) const;
+    float filterVoltage(float value);
 
     Q_PROPERTY(double localX READ getLocalX WRITE setLocalX NOTIFY localXChanged)
     Q_PROPERTY(double localY READ getLocalY WRITE setLocalY NOTIFY localYChanged)
@@ -371,7 +371,6 @@ public:
     bool isRotaryWing();
     bool isFixedWing();
 
-    friend class UASWaypointManager;
     friend class FileManager;
 
 protected: //COMMENTS FOR TEST UNIT
@@ -508,11 +507,6 @@ public:
     float getChargeLevel();
     /** @brief Get the human-readable status message for this code */
     void getStatusForCode(int statusCode, QString& uasState, QString& stateDescription);
-
-    /** @brief Get reference to the waypoint manager **/
-    UASWaypointManager* getWaypointManager() {
-        return _waypointManager;
-    }
 
     virtual FileManager* getFileManager() {
         return &fileManager;
@@ -701,7 +695,6 @@ private:
     void _say(const QString& text, int severity = 6);
     
 private:
-    UASWaypointManager* _waypointManager;
     Vehicle*            _vehicle;
 };
 

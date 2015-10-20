@@ -278,16 +278,25 @@ void Joystick::run(void)
             float   pitch = _adjustRange(_rgAxisValues[axis], _rgCalibration[axis]);
             
                     axis = _rgFunctionAxis[yawFunction];
+                    _rgCalibration[axis].min = -32768;
+                    _rgCalibration[axis].max = 32767;
+                    _rgCalibration[axis].center = 0;
+                    _rgCalibration[axis].reversed = false;
             float   yaw = _adjustRange(_rgAxisValues[axis], _rgCalibration[axis]);
-            
+
                     axis = _rgFunctionAxis[throttleFunction];
             float   throttle = _adjustRange(_rgAxisValues[axis], _rgCalibration[axis]);
 
+            float roll_limited = std::max(static_cast<float>(-M_PI_4), std::min(roll, static_cast<float>(M_PI_4)));
+            float pitch_limited = std::max(static_cast<float>(-M_PI_4), std::min(pitch, static_cast<float>(M_PI_4)));
+            float yaw_limited = std::max(static_cast<float>(-M_PI_4), std::min(yaw, static_cast<float>(M_PI_4)));
+            float throttle_limited = std::max(static_cast<float>(-M_PI_4), std::min(throttle, static_cast<float>(M_PI_4)));
+
             // Map from unit circle to linear range and limit
-            roll =      std::max(-1.0f, std::min(tanf(asinf(roll)), 1.0f));
-            pitch =     std::max(-1.0f, std::min(tanf(asinf(pitch)), 1.0f));
-            yaw =       std::max(-1.0f, std::min(tanf(asinf(yaw)), 1.0f));
-            throttle =  std::max(-1.0f, std::min(tanf(asinf(throttle)), 1.0f));
+            roll =      std::max(-1.0f, std::min(tanf(asinf(roll_limited)), 1.0f));
+            pitch =     std::max(-1.0f, std::min(tanf(asinf(pitch_limited)), 1.0f));
+            yaw =       std::max(-1.0f, std::min(tanf(asinf(yaw_limited)), 1.0f));
+            throttle =  std::max(-1.0f, std::min(tanf(asinf(throttle_limited)), 1.0f));
             
             // Adjust throttle to 0:1 range
             if (_throttleMode == ThrottleModeCenterZero) {
@@ -334,7 +343,7 @@ void Joystick::run(void)
             
             _lastButtonBits = newButtonBits;
             
-            qCDebug(JoystickValuesLog) << "roll:pitch:yaw:throttle" << roll << -pitch << yaw << throttle;
+            qCDebug(JoystickValuesLog) << "name:roll:pitch:yaw:throttle" << name() << roll << -pitch << yaw << throttle;
             
             emit manualControl(roll, -pitch, yaw, throttle, buttonPressedBits, _activeVehicle->joystickMode());
         }

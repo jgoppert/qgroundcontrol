@@ -158,11 +158,13 @@ void MissionManagerTest::_writeItems(MockLinkMissionItemHandler::FailureMode_t f
     }
     
     // Send the items to the vehicle
-    _missionManager->writeMissionItems(*list);
+    _missionManager->writeMissionItems(*list, false /* skipFirstItem */);
     
-    // writeMissionItems should emit inProgressChanged signal before returning so no need to wait for it
+    // writeMissionItems should emit these signals before returning:
+    //      inProgressChanged
+    //      newMissionItemsAvailable
     QVERIFY(_missionManager->inProgress());
-    QCOMPARE(_multiSpy->checkOnlySignalByMask(inProgressChangedSignalMask), true);
+    QCOMPARE(_multiSpy->checkSignalByMask(inProgressChangedSignalMask | newMissionItemsAvailableSignalMask), true);
     _checkInProgressValues(true);
     
     _multiSpy->clearAllSignals();

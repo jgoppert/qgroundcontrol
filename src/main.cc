@@ -31,22 +31,26 @@ This file is part of the QGROUNDCONTROL project
 #include <QtGlobal>
 #include <QApplication>
 #include <QSslSocket>
-#ifndef __mobile__
-#include <QSerialPortInfo>
-#endif
 #include <QProcessEnvironment>
+
+#ifndef __mobile__
+    #include <QSerialPortInfo>
+#endif
+
 #include "QGCApplication.h"
 #include "MainWindow.h"
-#include "configuration.h"
+
 #ifdef QT_DEBUG
-#ifndef __mobile__
-#include "UnitTest.h"
+    #ifndef __mobile__
+        #include "UnitTest.h"
+    #endif
+    #include "CmdLineOptParser.h"
+    #ifdef Q_OS_WIN
+        #include <crtdbg.h>
+    #endif
 #endif
-#include "CmdLineOptParser.h"
-#ifdef Q_OS_WIN
-#include <crtdbg.h>
-#endif
-#endif
+
+#include <iostream>
 
 /* SDL does ugly things to main() */
 #ifdef main
@@ -80,6 +84,25 @@ int WindowsCrtReportHook(int reportType, char* message, int* returnValue)
     return true;                        // We handled this fully ourselves
 }
 
+#endif
+
+#ifdef __android__
+#include <jni.h>
+#include "qserialport.h"
+
+jint JNI_OnLoad(JavaVM* vm, void* reserved)
+{
+    Q_UNUSED(reserved);
+
+    JNIEnv* env;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        return -1;
+    }
+
+    QSerialPort::setNativeMethods();
+
+    return JNI_VERSION_1_6;
+}
 #endif
 
 /**

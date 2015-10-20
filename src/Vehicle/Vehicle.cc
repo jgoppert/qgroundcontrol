@@ -31,6 +31,7 @@
 #include "UAS.h"
 #include "JoystickManager.h"
 #include "MissionManager.h"
+#include "CoordinateVector.h"
 
 QGC_LOGGING_CATEGORY(VehicleLog, "VehicleLog")
 
@@ -42,10 +43,11 @@ const char* Vehicle::_settingsGroup =               "Vehicle%1";        // %1 re
 const char* Vehicle::_joystickModeSettingsKey =     "JoystickMode";
 const char* Vehicle::_joystickEnabledSettingsKey =  "JoystickEnabled";
 
-Vehicle::Vehicle(LinkInterface* link, int vehicleId, MAV_AUTOPILOT firmwareType)
+Vehicle::Vehicle(LinkInterface* link, int vehicleId, MAV_AUTOPILOT firmwareType, MAV_TYPE vehicleType)
     : _id(vehicleId)
     , _active(false)
     , _firmwareType(firmwareType)
+    , _vehicleType(vehicleType)
     , _firmwarePlugin(NULL)
     , _autopilotPlugin(NULL)
     , _joystickMode(JoystickModeRC)
@@ -75,7 +77,7 @@ Vehicle::Vehicle(LinkInterface* link, int vehicleId, MAV_AUTOPILOT firmwareType)
     , _latitude(DEFAULT_LAT)
     , _longitude(DEFAULT_LON)
     , _refreshTimer(new QTimer(this))
-    , _batteryVoltage(0.0)
+    , _batteryVoltage(-1.0f)
     , _batteryPercent(0.0)
     , _batteryConsumed(-1.0)
     , _currentHeartbeatTimeout(0)
@@ -83,7 +85,6 @@ Vehicle::Vehicle(LinkInterface* link, int vehicleId, MAV_AUTOPILOT firmwareType)
     , _currentWaypoint(0)
     , _satelliteCount(-1)
     , _satelliteLock(0)
-    , _wpm(NULL)
     , _updateCount(0)
     , _missionManager(NULL)
     , _armed(false)
@@ -106,7 +107,7 @@ Vehicle::Vehicle(LinkInterface* link, int vehicleId, MAV_AUTOPILOT firmwareType)
     connect(_uas, &UAS::latitudeChanged, this, &Vehicle::setLatitude);
     connect(_uas, &UAS::longitudeChanged, this, &Vehicle::setLongitude);
     
-    _firmwarePlugin = FirmwarePluginManager::instance()->firmwarePluginForAutopilot(firmwareType);    
+    _firmwarePlugin = FirmwarePluginManager::instance()->firmwarePluginForAutopilot(_firmwareType, _vehicleType);
     _autopilotPlugin = AutoPilotPluginManager::instance()->newAutopilotPluginForVehicle(this);
     
     connect(_autopilotPlugin, &AutoPilotPlugin::missingParametersChanged, this, &Vehicle::missingParametersChanged);
@@ -140,14 +141,6 @@ Vehicle::Vehicle(LinkInterface* link, int vehicleId, MAV_AUTOPILOT firmwareType)
     connect(_mav, &UASInterface::nameChanged,                       this, &Vehicle::_updateName);
     connect(_mav, &UASInterface::systemTypeSet,                     this, &Vehicle::_setSystemType);
     connect(_mav, &UASInterface::localizationChanged,               this, &Vehicle::_setSatLoc);
-    _wpm = _mav->getWaypointManager();
-    if (_wpm) {
-        connect(_wpm, &UASWaypointManager::currentWaypointChanged,   this, &Vehicle::_updateCurrentWaypoint);
-        connect(_wpm, &UASWaypointManager::waypointDistanceChanged,  this, &Vehicle::_updateWaypointDistance);
-        connect(_wpm, SIGNAL(waypointViewOnlyListChanged(void)),     this, SLOT(_waypointViewOnlyListChanged(void)));
-        connect(_wpm, SIGNAL(waypointViewOnlyChanged(int,MissionItem*)),this, SLOT(_updateWaypointViewOnly(int,MissionItem*)));
-        _wpm->readWaypoints(true);
-    }
     UAS* pUas = dynamic_cast<UAS*>(_mav);
     if(pUas) {
         _setSatelliteCount(pUas->getSatelliteCount(), QString(""));
@@ -155,19 +148,18 @@ Vehicle::Vehicle(LinkInterface* link, int vehicleId, MAV_AUTOPILOT firmwareType)
     }
     _setSystemType(_mav, _mav->getSystemType());
     
-    _waypointViewOnlyListChanged();
-    
     _loadSettings();
     
-    if (qgcApp()->useNewMissionEditor()) {
         _missionManager = new MissionManager(this);
         connect(_missionManager, &MissionManager::error, this, &Vehicle::_missionManagerError);
-    }
     
     _firmwarePlugin->initializeVehicle(this);
     
     _sendMultipleTimer.start(_sendMessageMultipleIntraMessageDelay);
     connect(&_sendMultipleTimer, &QTimer::timeout, this, &Vehicle::_sendMessageMultipleNext);
+    
+    _mapTrajectoryTimer.setInterval(_mapTrajectoryMsecsBetweenPoints);
+    connect(&_mapTrajectoryTimer, &QTimer::timeout, this, &Vehicle::_addNewMapTrajectoryPoint);
 }
 
 Vehicle::~Vehicle()
@@ -191,12 +183,6 @@ Vehicle::~Vehicle()
     disconnect(_mav, &UASInterface::nameChanged,                     this, &Vehicle::_updateName);
     disconnect(_mav, &UASInterface::systemTypeSet,                   this, &Vehicle::_setSystemType);
     disconnect(_mav, &UASInterface::localizationChanged,             this, &Vehicle::_setSatLoc);
-    if (_wpm) {
-        disconnect(_wpm, &UASWaypointManager::currentWaypointChanged,    this, &Vehicle::_updateCurrentWaypoint);
-        disconnect(_wpm, &UASWaypointManager::waypointDistanceChanged,   this, &Vehicle::_updateWaypointDistance);
-        disconnect(_wpm, SIGNAL(waypointViewOnlyListChanged(void)),      this, SLOT(_waypointViewOnlyListChanged(void)));
-        disconnect(_wpm, SIGNAL(waypointViewOnlyChanged(int,MissionItem*)), this, SLOT(_updateWaypointViewOnly(int,MissionItem*)));
-    }
     UAS* pUas = dynamic_cast<UAS*>(_mav);
     if(pUas) {
         disconnect(pUas, &UAS::satelliteCountChanged, this, &Vehicle::_setSatelliteCount);
@@ -241,8 +227,8 @@ void Vehicle::_handleHomePosition(mavlink_message_t& message)
     _homePosition.setAltitude(homePos.altitude / 1000.0);
     _homePositionAvailable = true;
     
-    emit homePositionAvailableChanged(true);
     emit homePositionChanged(_homePosition);
+    emit homePositionAvailableChanged(true);
 }
 
 void Vehicle::_handleHeartbeat(mavlink_message_t& message)
@@ -256,6 +242,13 @@ void Vehicle::_handleHeartbeat(mavlink_message_t& message)
     if (_armed != newArmed) {
         _armed = newArmed;
         emit armedChanged(_armed);
+        
+        // We are transitioning to the armed state, begin tracking trajectory points for the map
+        if (_armed) {
+            _mapTrajectoryStart();
+        } else {
+            _mapTrajectoryStop();
+        }
     }
 
     if (heartbeat.base_mode != _base_mode || heartbeat.custom_mode != _custom_mode) {
@@ -766,21 +759,6 @@ void Vehicle::_updateWaypointViewOnly(int, MissionItem* /*wp*/)
      */
 }
 
-void Vehicle::_waypointViewOnlyListChanged()
-{
-    if(_wpm) {
-        const QList<MissionItem*>& newMisionItems = _wpm->getWaypointViewOnlyList();
-        _missionItems.clear();
-        qCDebug(VehicleLog) << QString("Loading %1 mission items").arg(newMisionItems.count());
-        for(int i = 0; i < newMisionItems.count(); i++) {
-            MissionItem* itemToCopy = newMisionItems[i];
-            MissionItem* item = new MissionItem(*itemToCopy);
-            item->setParent(this);
-            _missionItems.append(item);
-        }
-    }
-}
-
 void Vehicle::_handleTextMessage(int newCount)
 {
     // Reset?
@@ -975,11 +953,7 @@ void Vehicle::setActive(bool active)
 
 QmlObjectListModel* Vehicle::missionItemsModel(void)
 {
-    if (qgcApp()->useNewMissionEditor()) {
-        return missionManager()->missionItems();
-    } else {
-        return &_missionItems;
-    }
+    return missionManager()->missionItems();
 }
 
 bool Vehicle::homePositionAvailable(void)
@@ -989,10 +963,6 @@ bool Vehicle::homePositionAvailable(void)
 
 QGeoCoordinate Vehicle::homePosition(void)
 {
-    if (!_homePositionAvailable) {
-        qWarning() << "Call to homePosition while _homePositionAvailable == false";
-    }
-    
     return _homePosition;
 }
 
@@ -1127,4 +1097,25 @@ void Vehicle::_missionManagerError(int errorCode, const QString& errorMsg)
 {
     Q_UNUSED(errorCode);
     qgcApp()->showToolBarMessage(QString("Error during Mission communication with Vehicle: %1").arg(errorMsg));
+}
+
+void Vehicle::_addNewMapTrajectoryPoint(void)
+{
+    if (_mapTrajectoryHaveFirstCoordinate) {
+        _mapTrajectoryList.append(new CoordinateVector(_mapTrajectoryLastCoordinate, _geoCoordinate, this));
+    }
+    _mapTrajectoryHaveFirstCoordinate = true;
+    _mapTrajectoryLastCoordinate = _geoCoordinate;
+}
+
+void Vehicle::_mapTrajectoryStart(void)
+{
+    _mapTrajectoryHaveFirstCoordinate = false;
+    _mapTrajectoryList.clear();
+    _mapTrajectoryTimer.start();
+}
+
+void Vehicle::_mapTrajectoryStop()
+{
+    _mapTrajectoryTimer.stop();
 }

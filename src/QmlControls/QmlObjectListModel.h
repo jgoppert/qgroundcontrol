@@ -37,11 +37,21 @@ public:
     Q_INVOKABLE QObject* get(int index);
     
     Q_PROPERTY(int count READ count NOTIFY countChanged)
+    
+    /// Returns true if any of the items in the list are dirty. Requires each object to have
+    /// a dirty property and dirtyChanged signal.
+    Q_PROPERTY(bool dirty READ dirty WRITE setDirty NOTIFY dirtyChanged)
 
+    // Property accessors
+    
     int count(void) const;
+    
+    bool dirty(void) { return _dirty; }
+    void setDirty(bool dirty);
+    
     void append(QObject* object);
     void clear(void);
-    void removeAt(int i);
+    QObject* removeAt(int i);
     void insert(int i, QObject* object);
     QObject* operator[](int i);
     const QObject* operator[](int i) const;
@@ -51,6 +61,10 @@ public:
     
 signals:
     void countChanged(int count);
+    void dirtyChanged(bool dirtyChanged);
+    
+private slots:
+    void _childDirtyChanged(bool dirty);
     
 private:
     // Overrides from QAbstractListModel
@@ -63,6 +77,9 @@ private:
 	
 private:
     QList<QObject*> _objectList;
+    
+    bool _dirty;
+    bool _skipDirtyFirstItem;
         
     static const int ObjectRole;
     static const int TextRole;

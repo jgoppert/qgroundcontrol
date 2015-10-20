@@ -34,8 +34,7 @@
 UT_REGISTER_TEST(MainWindowTest)
 
 MainWindowTest::MainWindowTest(void) :
-    _mainWindow(NULL),
-    _mainToolBar(NULL)
+    _mainWindow()
 {
     
 }
@@ -44,16 +43,14 @@ void MainWindowTest::init(void)
 {
     UnitTest::init();
 
-    _mainWindow = MainWindow::_create(NULL);
+    _mainWindow = MainWindow::_create();
     Q_CHECK_PTR(_mainWindow);
-    
-    _mainToolBar = _mainWindow->getMainToolBar();
-    Q_ASSERT(_mainToolBar);
 }
 
 void MainWindowTest::cleanup(void)
 {
     _mainWindow->close();
+    QTest::qWait(200);
     delete _mainWindow;
     
     UnitTest::cleanup();
@@ -75,17 +72,6 @@ void MainWindowTest::_connectWindowClose_test(MAV_AUTOPILOT autopilot)
     
     QSignalSpy spyVehicle(MultiVehicleManager::instance(), SIGNAL(activeVehicleChanged(Vehicle*)));
     QCOMPARE(spyVehicle.wait(5000), true);
-    
-    // Cycle through all the top level views
-    
-    _mainToolBar->onSetupView();
-    QTest::qWait(200);
-    _mainToolBar->onPlanView();
-    QTest::qWait(200);
-    _mainToolBar->onFlyView();
-    QTest::qWait(200);
-    _mainToolBar->onAnalyzeView();
-    QTest::qWait(200);
     
     // On MainWindow close we should get a message box telling the user to disconnect first. Cancel should do nothing.
     setExpectedMessageBox(QGCMessageBox::Cancel);

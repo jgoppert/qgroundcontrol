@@ -34,8 +34,8 @@ This file is part of the QGROUNDCONTROL project
 
 const char* kMainFlightDisplayWidgetGroup = "FlightDisplayWidget";
 
-FlightDisplayWidget::FlightDisplayWidget(QWidget *parent)
-    : QGCQmlWidgetHolder(parent)
+FlightDisplayWidget::FlightDisplayWidget(const QString& title, QAction* action, QWidget *parent)
+    : QGCQmlWidgetHolder(title, action, parent)
 {
     setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
     setObjectName("FlightDisplayWidget");
@@ -44,10 +44,8 @@ FlightDisplayWidget::FlightDisplayWidget(QWidget *parent)
     if(pl) {
         pl->setContentsMargins(0,0,0,0);
     }
-#ifndef __android__
-    setMinimumWidth( 31 * ScreenToolsController::defaultFontPixelSize_s());
-    setMinimumHeight(33 * ScreenToolsController::defaultFontPixelSize_s());
-#endif
+    setMinimumWidth(300);
+    setMinimumHeight(300);
     setContextPropertyObject("flightDisplay", this);
 
     /*
@@ -86,6 +84,8 @@ FlightDisplayWidget::FlightDisplayWidget(QWidget *parent)
 
     setSource(QUrl::fromUserInput("qrc:/qml/FlightDisplayWidget.qml"));
     setVisible(true);
+    
+    loadSettings();
 }
 
 FlightDisplayWidget::~FlightDisplayWidget()

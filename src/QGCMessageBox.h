@@ -28,10 +28,12 @@
 
 #include "MainWindow.h"
 #include "QGCApplication.h"
+
 #ifdef QT_DEBUG
 #ifndef __mobile__
 #include "UnitTest.h"
 #endif
+
 #endif
 
 /// @file
@@ -99,16 +101,16 @@ private:
         parent = _validateParameters(buttons, &defaultButton, parent);
 
         if (MainWindow::instance()) {
-            MainWindow::instance()->hideSplashScreen();
             if (parent == NULL) {
                 parent = MainWindow::instance();
             }
         }
 
+        qDebug() << "QGCMessageBox (unit testing)" << title << text;
+
 #ifdef QT_DEBUG
 #ifndef __mobile__
         if (qgcApp()->runningUnitTests()) {
-            qDebug() << "QGCMessageBox (unit testing)" << title << text;
             return UnitTest::_messageBox(icon, title, text, buttons, defaultButton);
         } else
 #endif

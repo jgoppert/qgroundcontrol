@@ -29,6 +29,7 @@
 #include "QGCMessageBox.h"
 #include "MainWindow.h"
 #include "ParameterLoader.h"
+#include "UAS.h"
 
 AutoPilotPlugin::AutoPilotPlugin(Vehicle* vehicle, QObject* parent)
     : QObject(parent)
@@ -63,9 +64,7 @@ void AutoPilotPlugin::_parametersReadyChanged(bool parametersReady)
 			QGCMessageBox::warning("Setup", "One or more vehicle components require setup prior to flight.");
 			
 			// Take the user to Vehicle Summary
-			MainWindow* mainWindow = MainWindow::instance();
-			Q_ASSERT(mainWindow);
-			mainWindow->getMainToolBar()->onSetupView();
+            MainWindow::instance()->showSetupView();
 			qgcApp()->processEvents(QEventLoop::ExcludeUserInputEvents);
 		}
 	}

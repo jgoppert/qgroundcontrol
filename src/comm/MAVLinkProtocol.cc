@@ -22,7 +22,6 @@
 #include "UASInterface.h"
 #include "UASInterface.h"
 #include "UAS.h"
-#include "configuration.h"
 #include "LinkManager.h"
 #include "QGCMAVLink.h"
 #include "QGC.h"
@@ -34,8 +33,10 @@ Q_DECLARE_METATYPE(mavlink_message_t)
 IMPLEMENT_QGC_SINGLETON(MAVLinkProtocol, MAVLinkProtocol)
 QGC_LOGGING_CATEGORY(MAVLinkProtocolLog, "MAVLinkProtocolLog")
 
+#ifndef __mobile__
 const char* MAVLinkProtocol::_tempLogFileTemplate = "FlightDataXXXXXX"; ///< Template for temporary log file
 const char* MAVLinkProtocol::_logFileExtension = "mavlink";             ///< Extension for log files
+#endif
 
 /**
  * The default constructor will create a new MAVLink object sending heartbeats at
@@ -53,10 +54,12 @@ MAVLinkProtocol::MAVLinkProtocol(QObject* parent) :
     m_actionRetransmissionTimeout(100),
     versionMismatchIgnore(false),
     systemId(QGC::defaultSystemId),
+#ifndef __mobile__
     _logSuspendError(false),
     _logSuspendReplay(false),
     _logWasArmed(false),
     _tempLogFile(QString("%2.%3").arg(_tempLogFileTemplate).arg(_logFileExtension)),
+#endif
     _linkMgr(LinkManager::instance()),
     _heartbeatRate(MAVLINK_HEARTBEAT_DEFAULT_RATE),
     _heartbeatsEnabled(true)
@@ -92,7 +95,9 @@ MAVLinkProtocol::~MAVLinkProtocol()
 {
     storeSettings();
     
+#ifndef __mobile__
     _closeLogFile();
+#endif
 }
 
 void MAVLinkProtocol::loadSettings()
@@ -182,15 +187,17 @@ void MAVLinkProtocol::_linkStatusChanged(LinkInterface* link, bool connected)
         // Use the same shared pointer as LinkManager
         _connectedLinks.append(LinkManager::instance()->sharedPointerForLink(link));
         
+#ifndef __mobile__
         if (_connectedLinks.count() == 1) {
             // This is the first link, we need to start logging
             _startLogging();
         }
+#endif
         
         // Send command to start MAVLink
         // XXX hacky but safe
         // Start NSH
-        const char init[] = {0x0d, 0x0d, 0x0d};
+        const char init[] = {0x0d, 0x0d, 0x0d, 0x0d};
         link->writeBytes(init, sizeof(init));
         const char* cmd = "sh /etc/init.d/rc.usb\n";
         link->writeBytes(cmd, strlen(cmd));
@@ -207,10 +214,12 @@ void MAVLinkProtocol::_linkStatusChanged(LinkInterface* link, bool connected)
         Q_UNUSED(found);
         Q_ASSERT(found);
         
+#ifndef __mobile__
         if (_connectedLinks.count() == 0) {
             // Last link is gone, close out logging
             _stopLogging();
         }
+#endif
     }
 }
 
@@ -304,6 +313,7 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
                     rstatus.txbuf, rstatus.noise, rstatus.remnoise);
             }
 
+#ifndef __mobile__
             // Log data
             
             if (!_logSuspendError && !_logSuspendReplay && _tempLogFile.isOpen()) {
@@ -340,6 +350,7 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
                     }
                 }
             }
+#endif
 
             if (message.msgid == MAVLINK_MSG_ID_HEARTBEAT) {
                 // Notify the vehicle manager of the heartbeat. This will create/update vehicles as needed.
@@ -614,6 +625,7 @@ int MAVLinkProtocol::getHeartbeatRate()
     return _heartbeatRate;
 }
 
+#ifndef __mobile__
 /// @brief Closes the log file if it is open
 bool MAVLinkProtocol::_closeLogFile(void)
 {
@@ -708,3 +720,4 @@ void MAVLinkProtocol::deleteTempLogFiles(void)
         QFile::remove(fileInfo.filePath());
     }
 }
+#endif

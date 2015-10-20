@@ -27,9 +27,12 @@
 #include "SensorsComponentController.h"
 #include "QGCMAVLink.h"
 #include "QGCMessageBox.h"
+#include "UAS.h"
 
 #include <QVariant>
 #include <QQmlProperty>
+
+QGC_LOGGING_CATEGORY(SensorsComponentControllerLog, "SensorsComponentControllerLog")
 
 SensorsComponentController::SensorsComponentController(void) :
     _statusLog(NULL),
@@ -105,8 +108,36 @@ void SensorsComponentController::_startVisualCalibration(void)
     _airspeedButton->setEnabled(false);
     _levelButton->setEnabled(false);
     _cancelButton->setEnabled(true);
+
+    _resetInternalState();
     
     _progressBar->setProperty("value", 0);
+}
+
+void SensorsComponentController::_resetInternalState(void)
+{
+    _orientationCalDownSideDone = true;
+    _orientationCalUpsideDownSideDone = true;
+    _orientationCalLeftSideDone = true;
+    _orientationCalRightSideDone = true;
+    _orientationCalTailDownSideDone = true;
+    _orientationCalNoseDownSideDone = true;
+    _orientationCalDownSideInProgress = false;
+    _orientationCalUpsideDownSideInProgress = false;
+    _orientationCalLeftSideInProgress = false;
+    _orientationCalRightSideInProgress = false;
+    _orientationCalNoseDownSideInProgress = false;
+    _orientationCalTailDownSideInProgress = false;
+    _orientationCalDownSideRotate = false;
+    _orientationCalUpsideDownSideRotate = false;
+    _orientationCalLeftSideRotate = false;
+    _orientationCalRightSideRotate = false;
+    _orientationCalNoseDownSideRotate = false;
+    _orientationCalTailDownSideRotate = false;
+
+    emit orientationCalSidesRotateChanged();
+    emit orientationCalSidesDoneChanged();
+    emit orientationCalSidesInProgressChanged();
 }
 
 void SensorsComponentController::_stopCalibration(SensorsComponentController::StopCalibrationCode code)
@@ -121,20 +152,7 @@ void SensorsComponentController::_stopCalibration(SensorsComponentController::St
     _cancelButton->setEnabled(false);
     
     if (code == StopCalibrationSuccess) {
-        _orientationCalDownSideDone = true;
-        _orientationCalUpsideDownSideDone = true;
-        _orientationCalLeftSideDone = true;
-        _orientationCalRightSideDone = true;
-        _orientationCalTailDownSideDone = true;
-        _orientationCalNoseDownSideDone = true;
-        _orientationCalDownSideInProgress = false;
-        _orientationCalUpsideDownSideInProgress = false;
-        _orientationCalLeftSideInProgress = false;
-        _orientationCalRightSideInProgress = false;
-        _orientationCalNoseDownSideInProgress = false;
-        _orientationCalTailDownSideInProgress = false;
-        emit orientationCalSidesDoneChanged();
-        emit orientationCalSidesInProgressChanged();
+        _resetInternalState();
         
         _progressBar->setProperty("value", 1);
     } else {
@@ -225,6 +243,7 @@ void SensorsComponentController::_handleUASTextMessage(int uasId, int compId, in
     }
 
     _appendStatusLog(text);
+    qCDebug(SensorsComponentControllerLog) << text;
     
     if (_unknownFirmwareVersion) {
         // We don't know how to do visual cal with the version of firwmare

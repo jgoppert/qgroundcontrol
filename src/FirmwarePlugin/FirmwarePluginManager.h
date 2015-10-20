@@ -44,8 +44,9 @@ class FirmwarePluginManager : public QGCSingleton
 public:
     /// Returns appropriate plugin for autopilot type.
     ///     @param autopilotType Type of autopilot to return plugin for.
+    ///     @param vehicleType Vehicle type of autopilot to return plugin for.
     /// @return Singleton FirmwarePlugin instance for the specified MAV_AUTOPILOT.
-    FirmwarePlugin* firmwarePluginForAutopilot(MAV_AUTOPILOT autopilotType);
+    FirmwarePlugin* firmwarePluginForAutopilot(MAV_AUTOPILOT autopilotType, MAV_TYPE vehicleType);
     
 private:
     /// All access to singleton is through FirmwarePluginManager::instance
